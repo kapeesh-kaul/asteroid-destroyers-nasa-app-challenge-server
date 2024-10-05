@@ -20,21 +20,26 @@
 17. star_cartesian_z: Cartesian Z-coordinate of the star based on RA, Dec, and distance, used for 3D spatial visualization.
 18. star_habitable_zone_inner_au: Inner boundary of the star's habitable zone in astronomical units (AU), calculated using the star's luminosity.
 19. star_habitable_zone_outer_au: Outer boundary of the star's habitable zone in astronomical units (AU), calculated using the star's luminosity.
+20. habitability_score:
+
 """
 
 import numpy as np
 import pandas as pd
 
 class ExoData():
-    def __init__(self, path) -> None:
+    def __init__(self, path, SNR0 = 100, D = 6) -> None:
         self.path = path
+        self.SNR0 = SNR0
+        self.D = D
 
+    
     def transform(self):        
         exoplanet_data = pd.read_csv(self.path, comment='#', delimiter=',')
 
         # Extract the relevant columns from the main DataFrame for calculations
         columns_to_include = [
-            'ra', 'dec', 'sy_dist', 'st_rad', 'st_teff', 'pl_orbsmax', 'pl_orbeccen', 
+            'pl_name', 'hostname', 'ra', 'dec', 'sy_dist', 'st_rad', 'st_teff', 'pl_orbsmax', 'pl_orbeccen', 
             'pl_orbincl', 'pl_rade', 'pl_eqt', 'pl_orbper', 'st_lum'
         ]
         exoplanet_data = exoplanet_data[columns_to_include].copy()
@@ -74,6 +79,34 @@ class ExoData():
         'habitable_zone_outer': 'star_habitable_zone_outer_au'
         }, inplace=True)
 
+        # Calculate the habitability metrics for each planet
+
+        # Helper columns for habitable zone center and width
+        exoplanet_data['habitable_zone_center_au'] = (exoplanet_data['star_habitable_zone_inner_au'] + exoplanet_data['star_habitable_zone_outer_au']) / 2
+        exoplanet_data['habitable_zone_width_au'] = (exoplanet_data['star_habitable_zone_outer_au'] - exoplanet_data['star_habitable_zone_inner_au']) / 2
+
+        # 1. Distance from the Habitable Zone (HZ Score)
+        exoplanet_data['hz_score'] = 1 - abs((exoplanet_data['planet_orbit_semi_major_axis_au'] - exoplanet_data['habitable_zone_center_au']) / exoplanet_data['habitable_zone_width_au'])
+        exoplanet_data['hz_score'] = exoplanet_data['hz_score'].clip(lower=0)  # Ensure scores are not negative
+
+        # 2. Planet Size (Size Score) - Gaussian centered at 1 Earth radius
+        exoplanet_data['size_score'] = np.exp(-((exoplanet_data['planet_radius_earth'] - 1) ** 2) / 2)
+
+        # 3. Equilibrium Temperature (Temp Score) - Gaussian centered at 300 K
+        exoplanet_data['temp_score'] = np.exp(-((exoplanet_data['planet_equilibrium_temp_k'] - 300) ** 2) / 2000)
+
+        # 4. Orbital Eccentricity (Eccentricity Score) - Score decreases as eccentricity increases
+        exoplanet_data['eccentricity_score'] = 1 - exoplanet_data['planet_orbit_eccentricity']
+        exoplanet_data['eccentricity_score'] = exoplanet_data['eccentricity_score'].clip(lower=0)  # Ensure scores are not negative
+
+        # 5. Calculate the overall Habitability Score
+        exoplanet_data['habitability_score'] = (exoplanet_data['hz_score'] *
+                                                exoplanet_data['size_score'] *
+                                                exoplanet_data['temp_score'] *
+                                                exoplanet_data['eccentricity_score'])
+             
+        exoplanet_data['snr'] = self.SNR0 * ((exoplanet_data['star_radius_solar'] * exoplanet_data['planet_radius_earth'] * (self.D / 6)) / ((exoplanet_data['star_distance_pc'] / 10) * exoplanet_data['planet_orbit_semi_major_axis_au'])) ** 2
+        
         return exoplanet_data
 
 if __name__ == "__main__":
