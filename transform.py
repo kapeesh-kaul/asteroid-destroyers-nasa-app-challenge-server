@@ -1,25 +1,25 @@
 """
-# Exoplanet Data Definition
+# Exoplanet Data Definition (19 Columns)
 
 1. star_ra_deg: Right Ascension of the star in degrees.
 2. star_dec_deg: Declination of the star in degrees.
 3. star_distance_pc: Distance to the star in parsecs.
 4. star_radius_solar: Radius of the star in solar radii.
 5. star_teff_k: Effective temperature of the star in Kelvin.
-6. planet_orbit_semi_major_axis_au: Semi-major axis of the planet's orbit in astronomical units (AU).
-7. planet_orbit_eccentricity: Eccentricity of the planet's orbit, indicating how elongated the orbit is.
-8. planet_orbit_inclination_deg: Inclination of the planet's orbit in degrees.
+6. planet_orbit_semi_major_axis_au: Semi-major axis of the planet's orbit in astronomical units (AU), representing the average distance from the star.
+7. planet_orbit_eccentricity: Eccentricity of the planet's orbit, indicating how elongated the orbit is. A value of 0 represents a circular orbit.
+8. planet_orbit_inclination_deg: Inclination of the planet's orbit in degrees, relative to the line of sight.
 9. planet_radius_earth: Radius of the planet in Earth radii.
-10. planet_equilibrium_temp_k: Equilibrium temperature of the planet in Kelvin.
-11. planet_orbital_period_days: Orbital period of the planet in days.
-12. star_luminosity_solar: Luminosity of the star in solar units.
+10. planet_equilibrium_temp_k: Equilibrium temperature of the planet in Kelvin, estimating the surface temperature based on its distance from the star and stellar luminosity.
+11. planet_orbital_period_days: Orbital period of the planet in days, representing the time it takes for the planet to complete one orbit around its star.
+12. star_luminosity_solar: Luminosity of the star in solar units, indicating the total energy output of the star.
 13. ra_rad: Right Ascension converted to radians for Cartesian coordinate calculations.
 14. dec_rad: Declination converted to radians for Cartesian coordinate calculations.
-15. star_cartesian_x: Cartesian X-coordinate of the star based on RA, Dec, and distance.
-16. star_cartesian_y: Cartesian Y-coordinate of the star based on RA, Dec, and distance.
-17. star_cartesian_z: Cartesian Z-coordinate of the star based on RA, Dec, and distance.
-18. star_habitable_zone_inner_au: Inner boundary of the star's habitable zone in astronomical units (AU).
-19. star_habitable_zone_outer_au: Outer boundary of the star's habitable zone in astronomical units (AU).
+15. star_cartesian_x: Cartesian X-coordinate of the star based on RA, Dec, and distance, used for 3D spatial visualization.
+16. star_cartesian_y: Cartesian Y-coordinate of the star based on RA, Dec, and distance, used for 3D spatial visualization.
+17. star_cartesian_z: Cartesian Z-coordinate of the star based on RA, Dec, and distance, used for 3D spatial visualization.
+18. star_habitable_zone_inner_au: Inner boundary of the star's habitable zone in astronomical units (AU), calculated using the star's luminosity.
+19. star_habitable_zone_outer_au: Outer boundary of the star's habitable zone in astronomical units (AU), calculated using the star's luminosity.
 """
 
 import numpy as np
@@ -53,6 +53,26 @@ class ExoData():
         # Outer boundary: sqrt(Luminosity / 0.53)
         exoplanet_data['habitable_zone_inner'] = np.sqrt(exoplanet_data['st_lum'] / 1.1)
         exoplanet_data['habitable_zone_outer'] = np.sqrt(exoplanet_data['st_lum'] / 0.53)
+
+        exoplanet_data.rename(columns={
+        'ra': 'star_ra_deg',
+        'dec': 'star_dec_deg',
+        'sy_dist': 'star_distance_pc',
+        'st_rad': 'star_radius_solar',
+        'st_teff': 'star_teff_k',
+        'pl_orbsmax': 'planet_orbit_semi_major_axis_au',
+        'pl_orbeccen': 'planet_orbit_eccentricity',
+        'pl_orbincl': 'planet_orbit_inclination_deg',
+        'pl_rade': 'planet_radius_earth',
+        'pl_eqt': 'planet_equilibrium_temp_k',
+        'pl_orbper': 'planet_orbital_period_days',
+        'st_lum': 'star_luminosity_solar',
+        'X': 'star_cartesian_x',
+        'Y': 'star_cartesian_y',
+        'Z': 'star_cartesian_z',
+        'habitable_zone_inner': 'star_habitable_zone_inner_au',
+        'habitable_zone_outer': 'star_habitable_zone_outer_au'
+        }, inplace=True)
 
         return exoplanet_data
 

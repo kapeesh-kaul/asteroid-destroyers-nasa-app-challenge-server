@@ -1,4 +1,4 @@
-,ra,dec,sy_dist,st_rad,st_teff,pl_orbsmax,pl_orbeccen,pl_orbincl,pl_rade,pl_eqt,pl_orbper,st_lum,ra_rad,dec_rad,X,Y,Z,habitable_zone_inner,habitable_zone_outer
+,star_ra_deg,star_dec_deg,star_distance_pc,star_radius_solar,star_teff_k,planet_orbit_semi_major_axis_au,planet_orbit_eccentricity,planet_orbit_inclination_deg,planet_radius_earth,planet_equilibrium_temp_k,planet_orbital_period_days,star_luminosity_solar,ra_rad,dec_rad,star_cartesian_x,star_cartesian_y,star_cartesian_z,star_habitable_zone_inner_au,star_habitable_zone_outer_au
 0,185.1787793,17.7932516,93.1846,13.76,4874.0,1.178,0.238,,12.2,,323.21,1.978,3.2319794036089204,0.3105508250557491,-88.36495785761475,-8.008843366098171,28.475644468901386,1.3409630189463906,1.931858036113967
 1,229.2745954,71.8239428,125.321,29.79,4213.0,1.53,0.08,,12.3,,516.21997,2.43,4.0015965809078455,1.253564283624075,-25.505211604415894,-29.625963254448497,119.06779381201297,1.4863010829205867,2.141239281438989
 2,352.82415,39.2358367,75.4392,11.55,4888.0,0.775,0.0,,13.1,,186.76,1.84,6.1579430980503505,0.6847945351898267,57.97369156207769,-7.298956031050023,47.71634126965185,1.2933395813657265,1.8632493427363788
