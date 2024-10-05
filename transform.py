@@ -54,7 +54,7 @@ class ExoData():
         exoplanet_data['habitable_zone_inner'] = np.sqrt(exoplanet_data['st_lum'] / 1.1)
         exoplanet_data['habitable_zone_outer'] = np.sqrt(exoplanet_data['st_lum'] / 0.53)
 
-        exoplanet_data.to_csv('exoplanet_data.csv')
+        return exoplanet_data
 
 if __name__ == "__main__":
-    ExoData('PSCompPars_2024.10.05_08.34.19.csv').transform()
+    ExoData('PSCompPars_2024.10.05_08.34.19.csv').transform().to_csv('exoplanet_visualization.csv')
