@@ -1,32 +1,52 @@
 '''
 Available Routes:
-1. /get_top_planets (POST)
-   - Input Parameters (JSON):
-     - filepath (string, optional): Path to the CSV file.
-     - SNR0 (float, optional): Reference Signal-to-Noise Ratio. Default is 100.
-     - D (float, optional): Reference distance. Default is 6.
-     - top_n (integer, optional): Number of top planets to return. Default is 10.
-     - SNR_filter (integerm optional): SNR value to return count of values over threshold
-   - Returns a JSON structured like :
-   {
-        "SNR_filter_count": 22,
-        "top_planets": [planets]
-    }
+### 1. `/get_top_planets` (POST)
+   - **Input Parameters (JSON):**
+     - `filepath` (string, optional): Path to the CSV file. Defaults to `'PSCompPars.csv'`.
+     - `SNR0` (float, optional): Reference Signal-to-Noise Ratio. Default is `100`.
+     - `D` (float, optional): Reference distance. Default is `6`.
+     - `top_n` (integer, optional): Number of top planets to return. Default is `10`.
+     - `SNR_filter` (integer, optional): SNR value to return count of values over threshold. Default is `5`.
+     - `category` (string, optional): Category of planets to filter by (e.g., "Hot Jupiter", "Super Earth", etc.). Default is `None` (no filtering by category).
+   - **Returns:** A JSON object containing:
+     - `SNR_filter_count` (integer): The count of planets where the SNR is greater than the specified `SNR_filter`.
+     - `top_planets` (list): A list of dictionaries representing the top `N` planets, each containing details such as:
+       - `pl_name`: Planet name.
+       - `hostname`: Host star name.
+       - `sy_snum`: Number of stars in the system.
+       - `disc_year`: Year of discovery.
+       - `pl_rade`: Planet radius (Earth radii).
+       - `st_rad`: Stellar radius (solar radii).
+       - `st_teff`: Stellar effective temperature (K).
+       - `sy_dist`: Distance to the system (pc).
+       - `category`: Category of the planet.
 
-2. /get_nearest_neighbors (POST)
-   - Input Parameters (JSON):
-     - filepath (string, optional): Path to the CSV file.
-     - pl_name (string, optional): Name of the planet to find neighbors for.
-     - k (integer, optional): Number of nearest neighbors to return. Default is 5.
-   - Returns a JSON array of the K nearest neighbors for the specified planet.
+### 2. `/get_nearest_neighbors` (POST)
+   - **Input Parameters (JSON):**
+     - `filepath` (string, optional): Path to the CSV file. Defaults to `'PSCompPars.csv'`.
+     - `SNR0` (float, optional): Reference Signal-to-Noise Ratio. Default is `100`.
+     - `D` (float, optional): Reference distance. Default is `6`.
+     - `pl_name` (string, optional): Name of the planet to find neighbors for. Default is `'7 CMa b'`.
+     - `k` (integer, optional): Number of nearest neighbors to return. Default is `5`.
+     - `category` (string, optional): Category of planets to filter by (e.g., "Hot Jupiter", "Super Earth", etc.). Default is `None` (no filtering by category).
+   - **Returns:** A JSON array containing dictionaries for each of the `K` nearest neighbors of the specified planet. Each dictionary includes:
+     - `pl_name`: Planet name.
+     - `hostname`: Host star name.
+     - `sy_snum`: Number of stars in the system.
+     - `disc_year`: Year of discovery.
+     - `pl_rade`: Planet radius (Earth radii).
+     - `st_rad`: Stellar radius (solar radii).
+     - `st_teff`: Stellar effective temperature (K).
+     - `sy_dist`: Distance to the system (pc).
+     - `category`: Category of the planet.
 
-3. /get_planet_details (POST)
-   - Input Parameters (JSON):
-     - filepath (string, optional): Path to the CSV file containing the exoplanet data.
-     - pl_name (string, optional): Name of the planet to get details for. Defaults to '7 CMa b' if not provided.
-   - Returns: A JSON object containing:
-     - planet_details: The full row of data for the specified planet.
-     - schema_description: A dictionary providing descriptions of each column in the dataset (Note: In this implementation, the schema description is omitted based on the current instructions).
+### 3. `/get_planet_details` (POST)
+   - **Input Parameters (JSON):**
+     - `filepath` (string, optional): Path to the CSV file containing the exoplanet data. Defaults to `'PSCompPars.csv'`.
+     - `pl_name` (string, optional): Name of the planet to get details for. Defaults to `'7 CMa b'`.
+   - **Returns:** A JSON object containing:
+     - `planet_details`: The full row of data for the specified planet as a dictionary.
+     - `schema_description` (omitted): A dictionary providing descriptions of each column in the dataset. (Note: This is omitted in the current implementation based on the instructions).
 
    
 Notes:
@@ -56,6 +76,9 @@ cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 # Global variables to keep track of the dataframe and file path
 global_df = None
 current_filepath = None
+
+# The valid categories
+VALID_CATEGORIES = ['Hot Jupiter', 'Super Earth', 'Earth-like', 'Ice Giant', 'Mini-Neptune']
 
 # The ExoData class
 class ExoData():
@@ -114,6 +137,17 @@ class ExoData():
                                     df['temp_score'] *
                                     df['eccentricity_score'])
 
+        # Assign categories based on planet characteristics
+        conditions = [
+            (df['pl_rade'] > 10) & (df['pl_eqt'] > 1000),
+            (df['pl_rade'].between(1.25, 2.0)) & (df['pl_eqt'].between(250, 500)),
+            (df['pl_rade'] <= 1.25) & (df['pl_eqt'].between(250, 350)),
+            (df['pl_rade'] > 10) & (df['pl_eqt'] < 250),
+            (df['pl_rade'].between(2.0, 10)) & (df['pl_eqt'] < 1000)
+        ]
+        categories = ['Hot Jupiter', 'Super Earth', 'Earth-like', 'Ice Giant', 'Mini-Neptune']
+        df['category'] = np.select(conditions, categories, default='Unknown')
+
         return df
 
     @staticmethod
@@ -133,7 +167,7 @@ def load_global_dataframe(filepath):
 @app.before_request
 def before_request_func():
     data = request.json
-    filepath = data.get('filepath', 'PSCompPars.csv')
+    filepath = 'PSCompPars.csv'
     load_global_dataframe(filepath)
 
 # Function to calculate SNR dynamically
@@ -151,16 +185,21 @@ def get_top_planets():
     D = data.get('D', 6)
     SNR_filter = data.get('SNR_filter', 5)
     top_n = data.get('top_n', 10)
+    category_filter = data.get('category', None)
 
     # Create a temporary DataFrame to calculate SNR with user's parameters
     temp_df = global_df.copy()
     temp_df = calculate_snr(temp_df, SNR0, D)
 
+    # Validate the category and apply the filter if it is valid
+    if category_filter in VALID_CATEGORIES:
+        temp_df = temp_df[temp_df['category'] == category_filter]
+
     # Get the top 'top_n' records based on the SNR column
     top_records = temp_df.nlargest(top_n, 'snr')
 
     # Select and rename the columns to match the desired JSON format
-    top_records = top_records[['pl_name', 'hostname', 'sy_snum', 'disc_year', 'pl_rade', 'st_rad', 'st_teff', 'sy_dist']]
+    top_records = top_records[['pl_name', 'hostname', 'sy_snum', 'disc_year', 'pl_rade', 'st_rad', 'st_teff', 'sy_dist', 'category']]
     
     # Get the count of rows where snr > SNR_filter
     SNR_filter_count = temp_df[temp_df['snr'] > SNR_filter].shape[0]
@@ -180,10 +219,15 @@ def get_nearest_neighbors():
     D = data.get('D', 6)
     pl_name = data.get('pl_name', '7 CMa b')
     k = data.get('k', 5)
+    category_filter = data.get('category', None)
 
     # Create a temporary DataFrame to calculate SNR with user's parameters
     temp_df = global_df.copy()
     temp_df = calculate_snr(temp_df, SNR0, D)
+
+    # Validate the category and apply the filter if it is valid
+    if category_filter in VALID_CATEGORIES:
+        temp_df = temp_df[temp_df['category'] == category_filter]
 
     # Select features for the KNN search
     features = ['X', 'Y', 'Z', 'st_rad', 'st_teff', 'pl_orbsmax', 'habitability_score']
@@ -193,7 +237,6 @@ def get_nearest_neighbors():
 
     scaler = StandardScaler()
     feature_data_scaled = scaler.fit_transform(feature_data)
-    
 
     # Check if the given planet name exists
     if pl_name not in temp_df['pl_name'].values:
@@ -213,7 +256,7 @@ def get_nearest_neighbors():
     nearest_neighbors = temp_df.iloc[neighbor_indices]
 
     # Select the columns for the output
-    nearest_neighbors = nearest_neighbors[['pl_name', 'hostname', 'sy_snum', 'disc_year', 'pl_rade', 'st_rad', 'st_teff', 'sy_dist']]
+    nearest_neighbors = nearest_neighbors[['pl_name', 'hostname', 'sy_snum', 'disc_year', 'pl_rade', 'st_rad', 'st_teff', 'sy_dist', 'category']]
 
     result = nearest_neighbors.to_dict(orient='records')
     return jsonify(result)
@@ -239,4 +282,4 @@ def get_planet_details():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
-    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=port, debug=True, threaded=True)
