@@ -1,40 +1,3 @@
-'''
-Available Routes:
-1. /get_top_planets (POST)
-   - Input Parameters (JSON):
-     - filepath (string, optional): Path to the CSV file.
-     - SNR0 (float, optional): Reference Signal-to-Noise Ratio. Default is 100.
-     - D (float, optional): Reference distance. Default is 6.
-     - top_n (integer, optional): Number of top planets to return. Default is 10.
-     - SNR_filter (integerm optional): SNR value to return count of values over threshold
-   - Returns a JSON structured like :
-   {
-        "SNR_filter_count": 22,
-        "top_planets": [planets]
-    }
-
-2. /get_nearest_neighbors (POST)
-   - Input Parameters (JSON):
-     - filepath (string, optional): Path to the CSV file.
-     - pl_name (string, optional): Name of the planet to find neighbors for.
-     - k (integer, optional): Number of nearest neighbors to return. Default is 5.
-   - Returns a JSON array of the K nearest neighbors for the specified planet.
-
-3. /get_planet_details (POST)
-   - Input Parameters (JSON):
-     - filepath (string, optional): Path to the CSV file containing the exoplanet data.
-     - pl_name (string, optional): Name of the planet to get details for. Defaults to '7 CMa b' if not provided.
-   - Returns: A JSON object containing:
-     - planet_details: The full row of data for the specified planet.
-     - schema_description: A dictionary providing descriptions of each column in the dataset (Note: In this implementation, the schema description is omitted based on the current instructions).
-
-   
-Notes:
-- Ensure the CSV file contains the necessary columns, including 'pl_name', 
-  'hostname', 'ra', 'dec', 'sy_dist', 'st_rad', 'st_teff', 'pl_orbsmax', etc.
-- The API handles missing values by filling numeric columns with their median 
-  and non-numeric columns with 'unknown'.
-'''
 from flask import Flask, request, jsonify
 import pandas as pd
 import numpy as np
@@ -57,9 +20,7 @@ current_filepath = None
 
 # The ExoData class
 class ExoData():
-    def __init__(self, path, SNR0=100, D=6):
-        self.SNR0 = SNR0
-        self.D = D
+    def __init__(self, path):
         # Read the CSV file and perform initial transformations
         self.exoplanet_data = pd.read_csv(path, comment='#', delimiter=',')
         self.exoplanet_data = self.precompute_columns(self.exoplanet_data)
@@ -96,7 +57,7 @@ class ExoData():
         df['habitable_zone_inner'] = np.sqrt(df['st_lum'] / 1.1)
         df['habitable_zone_outer'] = np.sqrt(df['st_lum'] / 0.53)
 
-        # Habitability metrics and SNR calculation
+        # Habitability metrics
         df['habitable_zone_center_au'] = (df['habitable_zone_inner'] + df['habitable_zone_outer']) / 2
         df['habitable_zone_width_au'] = (df['habitable_zone_outer'] - df['habitable_zone_inner']) / 2
         df['hz_score'] = 1 - abs((df['pl_orbsmax'] - df['habitable_zone_center_au']) / df['habitable_zone_width_au'])
@@ -113,11 +74,6 @@ class ExoData():
                                     df['size_score'] *
                                     df['temp_score'] *
                                     df['eccentricity_score'])
-
-        # SNR calculation
-        df['snr'] = self.SNR0 * ((df['st_rad'] * df['pl_rade'] * (self.D / 6)) /
-                                 ((df['sy_dist'] / 10) * df['pl_orbsmax'])) ** 2
-        df['habitable'] = df['snr'] > 5
 
         return df
 
@@ -141,10 +97,12 @@ def before_request_func():
     filepath = data.get('filepath', 'PSCompPars.csv')
     load_global_dataframe(filepath)
 
-# Cached function for top planets
-@cache.memoize(timeout=300)
-def get_top_planets_cached(top_n, SNR_filter):
-    return global_df.nlargest(top_n, 'snr')
+# Function to calculate SNR dynamically
+def calculate_snr(df, SNR0, D):
+    df['snr'] = SNR0 * ((df['st_rad'] * df['pl_rade'] * (D / 6)) /
+                        ((df['sy_dist'] / 10) * df['pl_orbsmax'])) ** 2
+    df['habitable'] = df['snr'] > 5
+    return df
 
 # Route to get top N planets by SNR
 @app.route('/get_top_planets', methods=['POST'])
@@ -155,14 +113,18 @@ def get_top_planets():
     SNR_filter = data.get('SNR_filter', 5)
     top_n = data.get('top_n', 10)
 
+    # Create a temporary DataFrame to calculate SNR with user's parameters
+    temp_df = global_df.copy()
+    temp_df = calculate_snr(temp_df, SNR0, D)
+
     # Get the top 'top_n' records based on the SNR column
-    top_records = get_top_planets_cached(top_n, SNR_filter)
+    top_records = temp_df.nlargest(top_n, 'snr')
 
     # Select and rename the columns to match the desired JSON format
     top_records = top_records[['pl_name', 'hostname', 'sy_snum', 'disc_year', 'pl_rade', 'st_rad', 'st_teff', 'sy_dist']]
     
     # Get the count of rows where snr > SNR_filter
-    SNR_filter_count = global_df[global_df['snr'] > SNR_filter].shape[0]
+    SNR_filter_count = temp_df[temp_df['snr'] > SNR_filter].shape[0]
 
     result = {
         "SNR_filter_count": SNR_filter_count,
@@ -175,24 +137,31 @@ def get_top_planets():
 @app.route('/get_nearest_neighbors', methods=['POST'])
 def get_nearest_neighbors():
     data = request.json
+    SNR0 = data.get('SNR0', 100)
+    D = data.get('D', 6)
     pl_name = data.get('pl_name', '7 CMa b')
     k = data.get('k', 5)
 
+    # Create a temporary DataFrame to calculate SNR with user's parameters
+    temp_df = global_df.copy()
+    temp_df = calculate_snr(temp_df, SNR0, D)
+
     # Select features for the KNN search
     features = ['X', 'Y', 'Z', 'st_rad', 'st_teff', 'pl_orbsmax', 'habitability_score']
-    feature_data = global_df[features]
+    feature_data = temp_df[features]
 
     feature_data = feature_data.apply(lambda x: x.fillna(x.median()), axis=0)
     
     scaler = StandardScaler()
     feature_data_scaled = scaler.fit_transform(feature_data)
+    
 
     # Check if the given planet name exists
-    if pl_name not in global_df['pl_name'].values:
+    if pl_name not in temp_df['pl_name'].values:
         return jsonify({"error": "Planet name not found"}), 404
 
     # Get the index of the planet with the given name
-    target_index = global_df[global_df['pl_name'] == pl_name].index[0]
+    target_index = temp_df[temp_df['pl_name'] == pl_name].index[0]
     target_features = feature_data_scaled[target_index].reshape(1, -1)
 
     # Perform KNN to find the nearest neighbors
@@ -202,7 +171,7 @@ def get_nearest_neighbors():
 
     # Exclude the target planet itself from the results
     neighbor_indices = indices[0][1:]
-    nearest_neighbors = global_df.iloc[neighbor_indices]
+    nearest_neighbors = temp_df.iloc[neighbor_indices]
 
     # Select the columns for the output
     nearest_neighbors = nearest_neighbors[['pl_name', 'hostname', 'sy_snum', 'disc_year', 'pl_rade', 'st_rad', 'st_teff', 'sy_dist']]
