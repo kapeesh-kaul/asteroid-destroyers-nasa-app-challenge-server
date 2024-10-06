@@ -6,7 +6,7 @@ Available Routes:
      - SNR0 (float, optional): Reference Signal-to-Noise Ratio. Default is 100.
      - D (float, optional): Reference distance. Default is 6.
      - top_n (integer, optional): Number of top planets to return. Default is 10.
-     - SNR_filter (integer, optional): SNR value to return count of values over threshold
+     - SNR_filter (integerm optional): SNR value to return count of values over threshold
    - Returns a JSON structured like :
    {
         "SNR_filter_count": 22,
@@ -35,112 +35,135 @@ Notes:
 - The API handles missing values by filling numeric columns with their median 
   and non-numeric columns with 'unknown'.
 '''
-
 from flask import Flask, request, jsonify
 import pandas as pd
 import numpy as np
 import warnings
 from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import StandardScaler
+from flask_caching import Cache
 import os
 
 # Suppress all warnings
 warnings.filterwarnings('ignore')
 
+# Flask app
+app = Flask(__name__)
+cache = Cache(app, config={'CACHE_TYPE': 'simple'})
+
+# Global variables to keep track of the dataframe and file path
+global_df = None
+current_filepath = None
+
 # The ExoData class
 class ExoData():
-    def __init__(self, path, SNR0=100, D=6) -> None:
-        self.path = path
+    def __init__(self, path, SNR0=100, D=6):
         self.SNR0 = SNR0
         self.D = D
+        # Read the CSV file and perform initial transformations
+        self.exoplanet_data = pd.read_csv(path, comment='#', delimiter=',')
+        self.exoplanet_data = self.precompute_columns(self.exoplanet_data)
 
-    def transform(self):
-        exoplanet_data = pd.read_csv(self.path, comment='#', delimiter=',')
-
+    def precompute_columns(self, df):
+        # Validate schema
+        self.validate_schema(df)
+        
         # Extract the relevant columns
         columns_to_include = [
             'pl_name', 'hostname', 'ra', 'dec', 'sy_dist', 'st_rad', 'st_teff', 'pl_orbsmax', 'pl_orbeccen',
             'pl_orbincl', 'pl_rade', 'pl_eqt', 'pl_orbper', 'st_lum', 'sy_snum', 'disc_year'
         ]
-        exoplanet_data = exoplanet_data[columns_to_include].copy()
+        df = df[columns_to_include].copy()
 
         # Fill NaN values for numeric columns with their median
-        numeric_cols = exoplanet_data.select_dtypes(include=[np.number]).columns
-        exoplanet_data[numeric_cols] = exoplanet_data[numeric_cols].apply(lambda x: x.fillna(x.median()))
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        df[numeric_cols] = df[numeric_cols].apply(lambda x: pd.to_numeric(x, downcast='float').fillna(x.median()))
 
         # Fill NaN values for non-numeric columns with the placeholder 'unknown'
-        non_numeric_cols = exoplanet_data.select_dtypes(exclude=[np.number]).columns
-        exoplanet_data[non_numeric_cols] = exoplanet_data[non_numeric_cols].fillna('unknown')
+        non_numeric_cols = df.select_dtypes(exclude=[np.number]).columns
+        df[non_numeric_cols] = df[non_numeric_cols].fillna('unknown')
 
         # Convert RA and Dec from degrees to radians
-        exoplanet_data['ra_rad'] = np.radians(exoplanet_data['ra'])
-        exoplanet_data['dec_rad'] = np.radians(exoplanet_data['dec'])
+        df['ra_rad'] = np.radians(df['ra'])
+        df['dec_rad'] = np.radians(df['dec'])
 
         # Calculate Cartesian coordinates (X, Y, Z)
-        exoplanet_data['X'] = exoplanet_data['sy_dist'] * np.cos(exoplanet_data['ra_rad']) * np.cos(exoplanet_data['dec_rad'])
-        exoplanet_data['Y'] = exoplanet_data['sy_dist'] * np.sin(exoplanet_data['ra_rad']) * np.cos(exoplanet_data['dec_rad'])
-        exoplanet_data['Z'] = exoplanet_data['sy_dist'] * np.sin(exoplanet_data['dec_rad'])
+        df['X'] = df['sy_dist'] * np.cos(df['ra_rad']) * np.cos(df['dec_rad'])
+        df['Y'] = df['sy_dist'] * np.sin(df['ra_rad']) * np.cos(df['dec_rad'])
+        df['Z'] = df['sy_dist'] * np.sin(df['dec_rad'])
 
         # Calculate habitable zone boundaries
-        exoplanet_data['habitable_zone_inner'] = np.sqrt(exoplanet_data['st_lum'] / 1.1)
-        exoplanet_data['habitable_zone_outer'] = np.sqrt(exoplanet_data['st_lum'] / 0.53)
+        df['habitable_zone_inner'] = np.sqrt(df['st_lum'] / 1.1)
+        df['habitable_zone_outer'] = np.sqrt(df['st_lum'] / 0.53)
 
         # Habitability metrics and SNR calculation
-        exoplanet_data['habitable_zone_center_au'] = (exoplanet_data['habitable_zone_inner'] + exoplanet_data['habitable_zone_outer']) / 2
-        exoplanet_data['habitable_zone_width_au'] = (exoplanet_data['habitable_zone_outer'] - exoplanet_data['habitable_zone_inner']) / 2
-        exoplanet_data['hz_score'] = 1 - abs((exoplanet_data['pl_orbsmax'] - exoplanet_data['habitable_zone_center_au']) / exoplanet_data['habitable_zone_width_au'])
-        exoplanet_data['hz_score'] = exoplanet_data['hz_score'].clip(lower=0)
+        df['habitable_zone_center_au'] = (df['habitable_zone_inner'] + df['habitable_zone_outer']) / 2
+        df['habitable_zone_width_au'] = (df['habitable_zone_outer'] - df['habitable_zone_inner']) / 2
+        df['hz_score'] = 1 - abs((df['pl_orbsmax'] - df['habitable_zone_center_au']) / df['habitable_zone_width_au'])
+        df['hz_score'] = df['hz_score'].clip(lower=0)
 
         # Other scores
-        exoplanet_data['size_score'] = np.exp(-((exoplanet_data['pl_rade'] - 1) ** 2) / 2)
-        exoplanet_data['temp_score'] = np.exp(-((exoplanet_data['pl_eqt'] - 300) ** 2) / 2000)
-        exoplanet_data['eccentricity_score'] = 1 - exoplanet_data['pl_orbeccen']
-        exoplanet_data['eccentricity_score'] = exoplanet_data['eccentricity_score'].clip(lower=0)
+        df['size_score'] = np.exp(-((df['pl_rade'] - 1) ** 2) / 2)
+        df['temp_score'] = np.exp(-((df['pl_eqt'] - 300) ** 2) / 2000)
+        df['eccentricity_score'] = 1 - df['pl_orbeccen']
+        df['eccentricity_score'] = df['eccentricity_score'].clip(lower=0)
 
         # Overall habitability score
-        exoplanet_data['habitability_score'] = (exoplanet_data['hz_score'] *
-                                                exoplanet_data['size_score'] *
-                                                exoplanet_data['temp_score'] *
-                                                exoplanet_data['eccentricity_score'])
+        df['habitability_score'] = (df['hz_score'] *
+                                    df['size_score'] *
+                                    df['temp_score'] *
+                                    df['eccentricity_score'])
 
         # SNR calculation
-        exoplanet_data['snr'] = self.SNR0 * ((exoplanet_data['st_rad'] * exoplanet_data['pl_rade'] * (self.D / 6)) /
-                                             ((exoplanet_data['sy_dist'] / 10) * exoplanet_data['pl_orbsmax'])) ** 2
-        exoplanet_data['habitable'] = exoplanet_data['snr'] > 5
+        df['snr'] = self.SNR0 * ((df['st_rad'] * df['pl_rade'] * (self.D / 6)) /
+                                 ((df['sy_dist'] / 10) * df['pl_orbsmax'])) ** 2
+        df['habitable'] = df['snr'] > 5
 
-        return exoplanet_data
+        return df
 
-# Flask app
-app = Flask(__name__)
+    @staticmethod
+    def validate_schema(df):
+        required_columns = {'pl_name', 'hostname', 'ra', 'dec', 'sy_dist', 'st_rad', 'st_teff', 'pl_orbsmax', 'pl_orbeccen', 'pl_orbincl', 'pl_rade', 'pl_eqt', 'pl_orbper', 'st_lum', 'sy_snum', 'disc_year'}
+        if not required_columns.issubset(df.columns):
+            raise ValueError("The provided file does not contain the required columns.")
 
-@app.route('/', methods=['GET'])
-def get_server_status():
-    return jsonify({"message": "WE ONON"}), 200
+# Helper function to load global DataFrame
+def load_global_dataframe(filepath):
+    global global_df, current_filepath
+    if global_df is None or current_filepath != filepath:
+        exo_data_instance = ExoData(filepath)
+        global_df = exo_data_instance.precompute_columns(exo_data_instance.exoplanet_data)
+        current_filepath = filepath
+
+@app.before_request
+def before_request_func():
+    data = request.json
+    filepath = data.get('filepath', 'PSCompPars.csv')
+    load_global_dataframe(filepath)
+
+# Cached function for top planets
+@cache.memoize(timeout=300)
+def get_top_planets_cached(top_n, SNR_filter):
+    return global_df.nlargest(top_n, 'snr')
 
 # Route to get top N planets by SNR
 @app.route('/get_top_planets', methods=['POST'])
 def get_top_planets():
     data = request.json
-    filepath = data.get('filepath', 'PSCompPars.csv')
     SNR0 = data.get('SNR0', 100)
     D = data.get('D', 6)
     SNR_filter = data.get('SNR_filter', 5)
-    top_n = data.get('top_n', 10)  # Default to 10 if not specified
-
-    # Create an instance of ExoData and transform the data
-    exo_data_instance = ExoData(filepath, SNR0, D)
-    transformed_data = exo_data_instance.transform()
+    top_n = data.get('top_n', 10)
 
     # Get the top 'top_n' records based on the SNR column
-    top_records = transformed_data.nlargest(top_n, 'snr')
+    top_records = get_top_planets_cached(top_n, SNR_filter)
 
     # Select and rename the columns to match the desired JSON format
-    top_records = top_records[[
-        'pl_name', 'hostname', 'sy_snum', 'disc_year', 'pl_rade', 'st_rad', 'st_teff', 'sy_dist'
-    ]]
-    # Get the count of rows where snr > 5
-    SNR_filter_count = transformed_data[transformed_data['snr'] > SNR_filter].shape[0]
+    top_records = top_records[['pl_name', 'hostname', 'sy_snum', 'disc_year', 'pl_rade', 'st_rad', 'st_teff', 'sy_dist']]
+    
+    # Get the count of rows where snr > SNR_filter
+    SNR_filter_count = global_df[global_df['snr'] > SNR_filter].shape[0]
 
-    # Convert the top records to a JSON format
     result = {
         "SNR_filter_count": SNR_filter_count,
         "top_planets": top_records.to_dict(orient='records')
@@ -152,77 +175,60 @@ def get_top_planets():
 @app.route('/get_nearest_neighbors', methods=['POST'])
 def get_nearest_neighbors():
     data = request.json
-    filepath = data.get('filepath', 'PSCompPars.csv')
     pl_name = data.get('pl_name', '7 CMa b')
-    k = data.get('k', 5)  # Default to 5 neighbors if not specified
-
-    # Create an instance of ExoData and transform the data
-    exo_data_instance = ExoData(filepath)
-    transformed_data = exo_data_instance.transform()
+    k = data.get('k', 5)
 
     # Select features for the KNN search
     features = ['X', 'Y', 'Z', 'st_rad', 'st_teff', 'pl_orbsmax', 'habitability_score']
-    feature_data = transformed_data[features]
+    feature_data = global_df[features]
 
-    # Fill any remaining NaN values in the features with their median
     feature_data = feature_data.apply(lambda x: x.fillna(x.median()), axis=0)
+    
+    scaler = StandardScaler()
+    feature_data_scaled = scaler.fit_transform(feature_data)
 
     # Check if the given planet name exists
-    if pl_name not in transformed_data['pl_name'].values:
+    if pl_name not in global_df['pl_name'].values:
         return jsonify({"error": "Planet name not found"}), 404
 
     # Get the index of the planet with the given name
-    target_index = transformed_data[transformed_data['pl_name'] == pl_name].index[0]
-    target_features = feature_data.loc[target_index].values.reshape(1, -1)
+    target_index = global_df[global_df['pl_name'] == pl_name].index[0]
+    target_features = feature_data_scaled[target_index].reshape(1, -1)
 
     # Perform KNN to find the nearest neighbors
     knn = NearestNeighbors(n_neighbors=k + 1)  # Include the target planet itself
-    knn.fit(feature_data)
+    knn.fit(feature_data_scaled)
     distances, indices = knn.kneighbors(target_features)
 
     # Exclude the target planet itself from the results
     neighbor_indices = indices[0][1:]
-    nearest_neighbors = transformed_data.iloc[neighbor_indices]
+    nearest_neighbors = global_df.iloc[neighbor_indices]
 
     # Select the columns for the output
-    nearest_neighbors = nearest_neighbors[[
-        'pl_name', 'hostname', 'sy_snum', 'disc_year', 'pl_rade', 'st_rad', 'st_teff', 'sy_dist'
-    ]]
+    nearest_neighbors = nearest_neighbors[['pl_name', 'hostname', 'sy_snum', 'disc_year', 'pl_rade', 'st_rad', 'st_teff', 'sy_dist']]
 
-    # Convert to JSON format
     result = nearest_neighbors.to_dict(orient='records')
-
     return jsonify(result)
 
-# Define the full schema description dictionary
-
-# Route to get the full row for a given planet name along with the schema description
+# Route to get the full row for a given planet name
 @app.route('/get_planet_details', methods=['POST'])
 def get_planet_details():
     data = request.json
-    filepath = data.get('filepath', 'PSCompPars.csv')
-    pl_name = data.get('pl_name', '7 CMa b')  # Default to '7 CMa b' if not provided
-
-    # Create an instance of ExoData and transform the data
-    exo_data_instance = ExoData(filepath)
-    transformed_data = exo_data_instance.transform()
+    pl_name = data.get('pl_name', '7 CMa b')
 
     # Check if the given planet name exists
-    if pl_name not in transformed_data['pl_name'].values:
+    if pl_name not in global_df['pl_name'].values:
         return jsonify({"error": "Planet name not found"}), 404
 
     # Get the full row for the specified planet
-    planet_details = transformed_data[transformed_data['pl_name'] == pl_name].to_dict(orient='records')[0]
+    planet_details = global_df[global_df['pl_name'] == pl_name].to_dict(orient='records')[0]
 
-    # Prepare the final response with the predefined schema description
     result = {
         "planet_details": planet_details
     }
 
     return jsonify(result)
 
-
-
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
