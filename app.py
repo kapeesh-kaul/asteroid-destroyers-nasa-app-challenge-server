@@ -78,7 +78,7 @@ global_df = None
 current_filepath = None
 
 # The valid categories
-VALID_CATEGORIES = ['gas-giant', 'super-earth', 'terrestial', 'neptunian']
+VALID_CATEGORIES = ['gas-giant', 'super-earth', 'terrestial', 'neptunian', 'unknown']
 
 # The ExoData class
 class ExoData():
