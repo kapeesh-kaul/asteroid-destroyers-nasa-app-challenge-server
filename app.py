@@ -102,7 +102,7 @@ app = Flask(__name__)
 @app.route('/get_top_planets', methods=['POST'])
 def get_top_planets():
     data = request.json
-    filepath = data.get('filepath')
+    filepath = data.get('filepath', 'PSCompPars.csv')
     SNR0 = data.get('SNR0', 100)
     D = data.get('D', 6)
     top_n = data.get('top_n', 10)  # Default to 10 if not specified
