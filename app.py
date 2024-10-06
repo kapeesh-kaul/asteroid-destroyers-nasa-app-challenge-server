@@ -78,7 +78,7 @@ global_df = None
 current_filepath = None
 
 # The valid categories
-VALID_CATEGORIES = ['Hot Jupiter', 'Super Earth', 'Earth-like', 'Ice Giant', 'Mini-Neptune']
+VALID_CATEGORIES = ['Gas Giant', 'Super Earth', 'Terrestial', 'Neptunian']
 
 # The ExoData class
 class ExoData():
@@ -142,10 +142,10 @@ class ExoData():
             (df['pl_rade'] > 10) & (df['pl_eqt'] > 1000),
             (df['pl_rade'].between(1.25, 2.0)) & (df['pl_eqt'].between(250, 500)),
             (df['pl_rade'] <= 1.25) & (df['pl_eqt'].between(250, 350)),
-            (df['pl_rade'] > 10) & (df['pl_eqt'] < 250),
+            # (df['pl_rade'] > 10) & (df['pl_eqt'] < 250),
             (df['pl_rade'].between(2.0, 10)) & (df['pl_eqt'] < 1000)
         ]
-        categories = ['Hot Jupiter', 'Super Earth', 'Earth-like', 'Ice Giant', 'Mini-Neptune']
+        categories = ['Gas Giant', 'Super Earth', 'Terrestial', 'Neptunian']
         df['category'] = np.select(conditions, categories, default='Unknown')
 
         return df
