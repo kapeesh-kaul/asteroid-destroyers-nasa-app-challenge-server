@@ -98,6 +98,10 @@ class ExoData():
 # Flask app
 app = Flask(__name__)
 
+@app.route('/', methods=['GET'])
+def get_server_status():
+    return jsonify({"message": "WE ONON"}), 200
+
 # Route to get top N planets by SNR
 @app.route('/get_top_planets', methods=['POST'])
 def get_top_planets():
