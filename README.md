@@ -54,8 +54,8 @@ This project provides a solution to map and characterize exoplanets, assisting t
    ```bash
    pip install -r requirements.txt
    ```
-Run the Flask server:
-  ```bash
-python app.py
-  ```
+3. Run the Flask server:
+   ```bash
+   python app.py
+    ```
 Open the React frontend to access the visualizations.
