@@ -5,9 +5,9 @@ data = {
     # "filepath": 'PSCompPars.csv',
     # "SNR0": 100,
     # "D": 6,
-    "top_n": 2,
-    "SNR_filter": -10000000000000,
-    # "category": "hello"
+    "top_n": 100,
+    "SNR_filter": 5000000,
+    "category": "unknown"
 }
 
 response = requests.post(url, json=data)

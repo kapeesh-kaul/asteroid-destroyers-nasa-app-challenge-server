@@ -70,7 +70,10 @@ warnings.filterwarnings('ignore')
 
 # Flask app
 app = Flask(__name__)
-CORS(app)
+
+# Allow specific HTTP methods (GET, POST, OPTIONS, etc.) and headers
+CORS(app, resources={r"/*": {"origins": "*"}}, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization"])
+
 cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 
 # Global variables to keep track of the dataframe and file path
