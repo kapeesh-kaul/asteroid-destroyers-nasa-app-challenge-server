@@ -6,7 +6,7 @@ Available Routes:
      - SNR0 (float, optional): Reference Signal-to-Noise Ratio. Default is 100.
      - D (float, optional): Reference distance. Default is 6.
      - top_n (integer, optional): Number of top planets to return. Default is 10.
-     - SNR_filter (integerm optional): SNR value to return count of values over threshold
+     - SNR_filter (integer, optional): SNR value to return count of values over threshold
    - Returns a JSON structured like :
    {
         "SNR_filter_count": 22,
