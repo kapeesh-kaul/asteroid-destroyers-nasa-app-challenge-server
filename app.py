@@ -6,9 +6,10 @@ Available Routes:
      - SNR0 (float, optional): Reference Signal-to-Noise Ratio. Default is 100.
      - D (float, optional): Reference distance. Default is 6.
      - top_n (integer, optional): Number of top planets to return. Default is 10.
+     - SNR_filter (integerm optional): SNR value to return count of values over threshold
    - Returns a JSON structured like :
    {
-        "snr_greater_than_5_count": 22,
+        "SNR_filter_count": 22,
         "top_planets": [planets]
     }
 
@@ -122,6 +123,7 @@ def get_top_planets():
     filepath = data.get('filepath', 'PSCompPars.csv')
     SNR0 = data.get('SNR0', 100)
     D = data.get('D', 6)
+    SNR_filter = data.get('SNR_filter', 5)
     top_n = data.get('top_n', 10)  # Default to 10 if not specified
 
     # Create an instance of ExoData and transform the data
@@ -136,11 +138,11 @@ def get_top_planets():
         'pl_name', 'hostname', 'sy_snum', 'disc_year', 'pl_rade', 'st_rad', 'st_teff', 'sy_dist'
     ]]
     # Get the count of rows where snr > 5
-    snr_greater_than_5_count = transformed_data[transformed_data['snr'] > 5].shape[0]
+    SNR_filter_count = transformed_data[transformed_data['snr'] > SNR_filter].shape[0]
 
     # Convert the top records to a JSON format
     result = {
-        "snr_greater_than_5_count": snr_greater_than_5_count,
+        "SNR_filter_count": SNR_filter_count,
         "top_planets": top_records.to_dict(orient='records')
     }
     
