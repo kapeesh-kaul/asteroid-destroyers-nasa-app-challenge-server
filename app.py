@@ -6,7 +6,11 @@ Available Routes:
      - SNR0 (float, optional): Reference Signal-to-Noise Ratio. Default is 100.
      - D (float, optional): Reference distance. Default is 6.
      - top_n (integer, optional): Number of top planets to return. Default is 10.
-   - Returns a JSON array of the top N planets based on SNR.
+   - Returns a JSON structured like :
+   {
+        "snr_greater_than_5_count": 22,
+        "top_planets": [planets]
+    }
 
 2. /get_nearest_neighbors (POST)
    - Input Parameters (JSON):
@@ -122,10 +126,15 @@ def get_top_planets():
     top_records = top_records[[
         'pl_name', 'hostname', 'sy_snum', 'disc_year', 'pl_rade', 'st_rad', 'st_teff', 'sy_dist'
     ]]
+    # Get the count of rows where snr > 5
+    snr_greater_than_5_count = transformed_data[transformed_data['snr'] > 5].shape[0]
 
     # Convert the top records to a JSON format
-    result = top_records.to_dict(orient='records')
-
+    result = {
+        "snr_greater_than_5_count": snr_greater_than_5_count,
+        "top_planets": top_records.to_dict(orient='records')
+    }
+    
     return jsonify(result)
 
 # Route to get K nearest neighbors for a given planet name
