@@ -164,11 +164,10 @@ def load_global_dataframe(filepath):
         global_df = exo_data_instance.precompute_columns(exo_data_instance.exoplanet_data)
         current_filepath = filepath
 
-@app.before_request
-def before_request_func():
-    data = request.json
-    filepath = 'PSCompPars.csv'
-    load_global_dataframe(filepath)
+# @app.before_request
+# def before_request_func():
+filepath = 'PSCompPars.csv'
+load_global_dataframe(filepath)
 
 # Function to calculate SNR dynamically
 def calculate_snr(df, SNR0, D):
