@@ -2,7 +2,7 @@
 Available Routes:
 1. /get_top_planets (POST)
    - Input Parameters (JSON):
-     - filepath (string, required): Path to the CSV file.
+     - filepath (string, optional): Path to the CSV file.
      - SNR0 (float, optional): Reference Signal-to-Noise Ratio. Default is 100.
      - D (float, optional): Reference distance. Default is 6.
      - top_n (integer, optional): Number of top planets to return. Default is 10.
@@ -14,11 +14,20 @@ Available Routes:
 
 2. /get_nearest_neighbors (POST)
    - Input Parameters (JSON):
-     - filepath (string, required): Path to the CSV file.
-     - pl_name (string, required): Name of the planet to find neighbors for.
+     - filepath (string, optional): Path to the CSV file.
+     - pl_name (string, optional): Name of the planet to find neighbors for.
      - k (integer, optional): Number of nearest neighbors to return. Default is 5.
    - Returns a JSON array of the K nearest neighbors for the specified planet.
 
+3. /get_planet_details (POST)
+   - Input Parameters (JSON):
+     - filepath (string, optional): Path to the CSV file containing the exoplanet data.
+     - pl_name (string, optional): Name of the planet to get details for. Defaults to '7 CMa b' if not provided.
+   - Returns: A JSON object containing:
+     - planet_details: The full row of data for the specified planet.
+     - schema_description: A dictionary providing descriptions of each column in the dataset (Note: In this implementation, the schema description is omitted based on the current instructions).
+
+   
 Notes:
 - Ensure the CSV file contains the necessary columns, including 'pl_name', 
   'hostname', 'ra', 'dec', 'sy_dist', 'st_rad', 'st_teff', 'pl_orbsmax', etc.
@@ -141,8 +150,8 @@ def get_top_planets():
 @app.route('/get_nearest_neighbors', methods=['POST'])
 def get_nearest_neighbors():
     data = request.json
-    filepath = data.get('filepath')
-    pl_name = data.get('pl_name')
+    filepath = data.get('filepath', 'PSCompPars.csv')
+    pl_name = data.get('pl_name', '7 CMa b')
     k = data.get('k', 5)  # Default to 5 neighbors if not specified
 
     # Create an instance of ExoData and transform the data
@@ -182,6 +191,35 @@ def get_nearest_neighbors():
     result = nearest_neighbors.to_dict(orient='records')
 
     return jsonify(result)
+
+# Define the full schema description dictionary
+
+# Route to get the full row for a given planet name along with the schema description
+@app.route('/get_planet_details', methods=['POST'])
+def get_planet_details():
+    data = request.json
+    filepath = data.get('filepath', 'PSCompPars.csv')
+    pl_name = data.get('pl_name', '7 CMa b')  # Default to '7 CMa b' if not provided
+
+    # Create an instance of ExoData and transform the data
+    exo_data_instance = ExoData(filepath)
+    transformed_data = exo_data_instance.transform()
+
+    # Check if the given planet name exists
+    if pl_name not in transformed_data['pl_name'].values:
+        return jsonify({"error": "Planet name not found"}), 404
+
+    # Get the full row for the specified planet
+    planet_details = transformed_data[transformed_data['pl_name'] == pl_name].to_dict(orient='records')[0]
+
+    # Prepare the final response with the predefined schema description
+    result = {
+        "planet_details": planet_details
+    }
+
+    return jsonify(result)
+
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
