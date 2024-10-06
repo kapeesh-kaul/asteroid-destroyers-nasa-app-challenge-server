@@ -189,19 +189,22 @@ def get_top_planets():
     # Create a temporary DataFrame to calculate SNR with user's parameters
     temp_df = global_df.copy()
     temp_df = calculate_snr(temp_df, SNR0, D)
+    
+    # Get the count of rows where snr > SNR_filter
+    SNR_filter_count = temp_df[temp_df['snr'] > SNR_filter].shape[0]
 
     # Validate the category and apply the filter if it is valid
     if category_filter in VALID_CATEGORIES:
         temp_df = temp_df[temp_df['category'] == category_filter]
+
+    if SNR_filter_count < top_n:
+        top_n = SNR_filter_count
 
     # Get the top 'top_n' records based on the SNR column
     top_records = temp_df.nlargest(top_n, 'snr')
 
     # Select and rename the columns to match the desired JSON format
     top_records = top_records[['pl_name', 'hostname', 'sy_snum', 'disc_year', 'pl_rade', 'st_rad', 'st_teff', 'sy_dist', 'category']]
-    
-    # Get the count of rows where snr > SNR_filter
-    SNR_filter_count = temp_df[temp_df['snr'] > SNR_filter].shape[0]
 
     result = {
         "SNR_filter_count": SNR_filter_count,
