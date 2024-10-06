@@ -1,3 +1,41 @@
+'''
+Available Routes:
+1. /get_top_planets (POST)
+   - Input Parameters (JSON):
+     - filepath (string, optional): Path to the CSV file.
+     - SNR0 (float, optional): Reference Signal-to-Noise Ratio. Default is 100.
+     - D (float, optional): Reference distance. Default is 6.
+     - top_n (integer, optional): Number of top planets to return. Default is 10.
+     - SNR_filter (integerm optional): SNR value to return count of values over threshold
+   - Returns a JSON structured like :
+   {
+        "SNR_filter_count": 22,
+        "top_planets": [planets]
+    }
+
+2. /get_nearest_neighbors (POST)
+   - Input Parameters (JSON):
+     - filepath (string, optional): Path to the CSV file.
+     - pl_name (string, optional): Name of the planet to find neighbors for.
+     - k (integer, optional): Number of nearest neighbors to return. Default is 5.
+   - Returns a JSON array of the K nearest neighbors for the specified planet.
+
+3. /get_planet_details (POST)
+   - Input Parameters (JSON):
+     - filepath (string, optional): Path to the CSV file containing the exoplanet data.
+     - pl_name (string, optional): Name of the planet to get details for. Defaults to '7 CMa b' if not provided.
+   - Returns: A JSON object containing:
+     - planet_details: The full row of data for the specified planet.
+     - schema_description: A dictionary providing descriptions of each column in the dataset (Note: In this implementation, the schema description is omitted based on the current instructions).
+
+   
+Notes:
+- Ensure the CSV file contains the necessary columns, including 'pl_name', 
+  'hostname', 'ra', 'dec', 'sy_dist', 'st_rad', 'st_teff', 'pl_orbsmax', etc.
+- The API handles missing values by filling numeric columns with their median 
+  and non-numeric columns with 'unknown'.
+'''
+
 from flask import Flask, request, jsonify
 import pandas as pd
 import numpy as np
@@ -151,7 +189,7 @@ def get_nearest_neighbors():
     feature_data = temp_df[features]
 
     feature_data = feature_data.apply(lambda x: x.fillna(x.median()), axis=0)
-    
+
     scaler = StandardScaler()
     feature_data_scaled = scaler.fit_transform(feature_data)
     
