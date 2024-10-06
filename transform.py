@@ -26,6 +26,10 @@
 
 import numpy as np
 import pandas as pd
+import warnings
+
+# Suppress all warnings
+warnings.filterwarnings('ignore')
 
 class ExoData():
     def __init__(self, path, SNR0 = 100, D = 6) -> None:
@@ -106,6 +110,7 @@ class ExoData():
                                                 exoplanet_data['eccentricity_score'])
              
         exoplanet_data['snr'] = self.SNR0 * ((exoplanet_data['star_radius_solar'] * exoplanet_data['planet_radius_earth'] * (self.D / 6)) / ((exoplanet_data['star_distance_pc'] / 10) * exoplanet_data['planet_orbit_semi_major_axis_au'])) ** 2
+        exoplanet_data['habitable'] = exoplanet_data.snr > 5
         
         return exoplanet_data
 

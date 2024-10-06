@@ -35,7 +35,7 @@ Notes:
 - The API handles missing values by filling numeric columns with their median 
   and non-numeric columns with 'unknown'.
 '''
-
+from flask_cors import CORS
 from flask import Flask, request, jsonify
 import pandas as pd
 import numpy as np
@@ -50,6 +50,7 @@ warnings.filterwarnings('ignore')
 
 # Flask app
 app = Flask(__name__)
+CORS(app)
 cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 
 # Global variables to keep track of the dataframe and file path
