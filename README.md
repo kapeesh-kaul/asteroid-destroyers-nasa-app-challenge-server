@@ -1,5 +1,5 @@
 # Exoplanet Characterization and Visualization App
-#### FrontEnd Repo: https://github.com/KlausMikhaelson/asteroid-destroyers-nasa-app-challenge
+#### FrontEnd Repo: https://github.com/KlausMikhaelson/asteroid-destroyers-nasa-app-challenge-server
 
 ## Overview
 This project provides a solution to map and characterize exoplanets, assisting the Habitable Worlds Observatory (HWO) in prioritizing potential planets for further study. The application integrates data processing, machine learning, and interactive visualization to facilitate the exploration of exoplanet data.
